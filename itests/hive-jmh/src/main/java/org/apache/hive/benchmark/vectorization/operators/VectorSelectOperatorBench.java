@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-package org.apache.hive.benchmark.vectorization.projection;
+package org.apache.hive.benchmark.vectorization.operators;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.CompilationOpContext;
@@ -39,28 +38,21 @@ import org.apache.hadoop.hive.ql.udf.generic.GenericUDFOPPlus;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hive.benchmark.vectorization.BlackholeOperator;
 import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.infra.Blackhole;
+import org.openjdk.jmh.profile.LinuxPerfAsmProfiler;
+import org.openjdk.jmh.profile.LinuxPerfNormProfiler;
+import org.openjdk.jmh.profile.LinuxPerfProfiler;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 @State(Scope.Benchmark)
-@Warmup(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
-@Measurement(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
-@Fork(1)
-@BenchmarkMode(Mode.AverageTime)
-@OutputTimeUnit(TimeUnit.NANOSECONDS)
-public class VectorSelectOperatorBench {
+public class VectorSelectOperatorBench extends AbstractOperatorBench {
 
   private SelectDesc selDesc;
   private VectorSelectOperator vso;
@@ -124,6 +116,11 @@ public class VectorSelectOperatorBench {
       VectorizedRowBatch.DEFAULT_SIZE, 4, 17);
   }
 
+  @TearDown
+  public void tearDown() throws HiveException {
+    vso.close(false);
+  }
+
   @Benchmark
   public void testSelectStar() throws HiveException {
     selDesc.setSelStarNoCompute(true);
@@ -154,11 +151,15 @@ public class VectorSelectOperatorBench {
    *    $ java -jar target/benchmarks.jar VectorSelectOperatorBench -prof perf     -f 1 (Linux)
    *    $ java -jar target/benchmarks.jar VectorSelectOperatorBench -prof perfnorm -f 3 (Linux)
    *    $ java -jar target/benchmarks.jar VectorSelectOperatorBench -prof perfasm  -f 1 (Linux)
+   *    $ java -jar target/benchmarks.jar VectorSelectOperatorBench -prof gc  -f 1 (allocation counting via gc)
    */
 
   public static void main(String[] args) throws RunnerException {
     Options opt = new OptionsBuilder()
       .include(VectorSelectOperatorBench.class.getSimpleName())
+      .addProfiler(LinuxPerfProfiler.class)
+      .addProfiler(LinuxPerfNormProfiler.class)
+      .addProfiler(LinuxPerfAsmProfiler.class)
       .build();
     new Runner(opt).run();
   }
